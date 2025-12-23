@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Question Paper Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Student Login</h2>
+            <form id="loginForm">
+                <div class="mb-4">
+                    <input type="email" id="email" placeholder="Student Email" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                </div>
+                <div class="mb-6">
+                    <input type="password" id="password" placeholder="Password" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200">Login</button>
+            </form>
+            <p class="text-center mt-4 text-sm text-gray-600">New user? <a href="#" id="signupLink" class="text-blue-600 font-semibold">Sign Up</a></p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="container mx-auto px-4 py-8 max-w-6xl" id="mainApp" style="display:none;">
+        <div class="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl p-8 mb-8">
+            <div class="flex flex-col md:flex-row gap-4 items-center justify-between mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    <i class="fas fa-file-archive mr-3"></i>Question Paper Manager
+                </h1>
+                <div class="flex items-center space-x-3">
+                    <span id="userEmail" class="text-sm bg-blue-100 px-3 py-1 rounded-full font-medium"></span>
+                    <button id="logoutBtn" class="bg-red-500 text-white px-6 py-2 rounded-xl font-semibold hover:bg-red-600 transition-all duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+
+            <!-- Breadcrumb & Controls -->
+            <div class="flex flex-col lg:flex-row gap-4 mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl">
+                <nav id="breadcrumb" class="flex flex-wrap items-center text-sm font-medium text-gray-700 space-x-2"></nav>
+                <div class="flex flex-wrap gap-2">
+                    <button id="backBtn" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-blue-700 flex items-center space-x-2 transition-all duration-200">
+                        <i class="fas fa-arrow-left"></i><span>Back</span>
+                    </button>
+                    <label id="uploadBtn" class="bg-green-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-green-700 cursor-pointer flex items-center space-x-2 transition-all duration-200">
+                        <i class="fas fa-upload"></i><span>Upload</span>
+                        <input type="file" id="fileInput" accept=".pdf" class="hidden">
+                    </label>
+                    <button id="newFolderBtn" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 flex items-center space-x-2 transition-all duration-200">
+                        <i class="fas fa-folder-plus"></i><span>New Folder</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Folder Structure Form -->
+            <div id="folderForm" class="bg-white rounded-2xl p-6 mb-8 shadow-lg hidden border-2 border-dashed border-gray-300">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">Create Folder Structure</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <select id="yearSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select Year</option>
+                        <option value="2023">2023</option>
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                    </select>
+                    <select id="semSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+                        <option value="">Semester</option>
+                        <option value="SEM1">SEM 1</option>
+                        <option value="SEM3">SEM 3</option>
+                        <option value="SEM5">SEM 5</option>
+                    </select>
+                    <select id="branchSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+                        <option value="">Branch</option>
+                        <option value="CSE">CSE</option>
+                        <option value="ECE">ECE</option>
+                        <option value="ME">Mechanical</option>
+                    </select>
+                    <input id="subjectInput" placeholder="Subject (e.g., OS)" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="createFolderBtn" class="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition-all duration-200">
+                        Create Folder
+                    </button>
+                    <button id="cancelFolderBtn" class="px-6 bg-gray-500 text-white py-3 rounded-xl font-semibold hover:bg-gray-600 transition-all duration-200">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Files Grid -->
+            <div id="filesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                <!-- Files will be loaded here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script src="supabase/config.js"></script>
+    <script src="supabase/service.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
