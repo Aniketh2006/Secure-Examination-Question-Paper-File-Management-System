@@ -1,0 +1,137 @@
+/* Custom styles for enhanced responsive file manager */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* {
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+/* Enhanced card hover effects */
+.group:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Mobile-first responsive improvements */
+@media (max-width: 640px) {
+    .container {
+        padding: 1rem !important;
+    }
+    
+    #filesContainer {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+    }
+    
+    .group {
+        height: 140px !important;
+        padding: 1rem !important;
+    }
+    
+    .text-4xl {
+        font-size: 2rem !important;
+    }
+}
+
+/* Folder animations */
+.fa-folder {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.group:hover .fa-folder {
+    color: #f59e0b !important;
+    transform: scale(1.15) rotate(5deg);
+}
+
+.fa-file-pdf {
+    transition: all 0.3s ease;
+}
+
+.group:hover .fa-file-pdf {
+    color: #dc2626 !important;
+    transform: scale(1.1);
+}
+
+/* Breadcrumb improvements */
+#breadcrumb span {
+    background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: all 0.2s ease;
+}
+
+/* Modal enhancements */
+#loginModal {
+    backdrop-filter: blur(20px);
+}
+
+#loginModal > div {
+    animation: slideUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Loading spinner */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Success/Error toasts */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast.success { background: linear-gradient(45deg, #10b981, #059669); }
+.toast.error { background: linear-gradient(45deg, #ef4444, #dc2626); }
+
+/* File list empty state */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #6b7280;
+}
+
+.empty-state i {
+    font-size: 5rem;
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+
