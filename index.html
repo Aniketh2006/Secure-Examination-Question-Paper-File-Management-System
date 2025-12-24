@@ -6,7 +6,7 @@
   <title>Student Question Paper Manager</title>
   <!-- UI libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@sbClient/sbClient-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -129,18 +129,18 @@
   <!-- Main script -->
   <script>
     // Supabase config (your project)
-    const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.supabase.co';
+    const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.sbClient.co';
     const SUPABASE_ANON_KEY =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw';
 
-    // IMPORTANT: use window.supabase, not Supabase
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // IMPORTANT: use window.sbClient, not Supabase
+    const sbClient = window.sbClient.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentPath = [];
     let user = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sbClient.auth.getSession();
       if (session) {
         user = session.user;
         showMainApp();
@@ -167,7 +167,7 @@
       e.preventDefault();
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
       if (error) { alert('Login failed: ' + error.message); return; }
       user = data.user;
       showMainApp();
@@ -205,7 +205,7 @@
       e.preventDefault();
       const email = document.getElementById('signupEmail').value;
       const password = document.getElementById('signupPassword').value;
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await sbClient.auth.signUp({ email, password });
       if (error) { alert('Signup failed: ' + error.message); return; }
       alert('Signup success. Check email if confirmation is required, then reload and login.');
     }
@@ -213,7 +213,7 @@
     // ---------- App controls ----------
     function setupAppListeners() {
       document.getElementById('logoutBtn').onclick = async () => {
-        await supabase.auth.signOut();
+        await sbClient.auth.signOut();
         location.reload();
       };
       document.getElementById('fileInput').onchange = handleUpload;
@@ -231,7 +231,7 @@
       const file = e.target.files[0];
       if (!file) return;
       const path = [...currentPath, file.name].join('/');
-      const { error } = await supabase.storage.from('question-papers').upload(path, file);
+      const { error } = await sbClient.storage.from('question-papers').upload(path, file);
       if (error) alert('Upload failed: ' + error.message);
       else { loadFiles(); e.target.value = ''; alert('Uploaded!'); }
     }
@@ -243,7 +243,7 @@
       const subject = document.getElementById('subjectInput').value;
       if (!year || !sem || !branch || !subject) { alert('Fill all fields'); return; }
       const path = `${year}/${sem}/${branch}/${subject}/.keep`;
-      const { error } = await supabase.storage.from('question-papers')
+      const { error } = await sbClient.storage.from('question-papers')
         .upload(path, new Blob(['folder']));
       if (error) alert('Folder failed: ' + error.message);
       else { loadFiles(); document.getElementById('folderForm').classList.add('hidden'); alert('Folder created!'); }
@@ -251,7 +251,7 @@
 
     async function loadFiles() {
       updateBreadcrumb();
-      const { data, error } = await supabase.storage.from('question-papers')
+      const { data, error } = await sbClient.storage.from('question-papers')
         .list(currentPath.join('/'));
       if (error) { console.error(error); return; }
       const container = document.getElementById('filesContainer');
@@ -287,7 +287,7 @@
 
     async function downloadFile(filename) {
       const fullPath = currentPath.join('/') + '/' + filename;
-      const { data, error } = await supabase.storage.from('question-papers')
+      const { data, error } = await sbClient.storage.from('question-papers')
         .createSignedUrl(fullPath, 60);
       if (error) { alert('Download failed: ' + error.message); return; }
       const a = document.createElement('a');
@@ -298,3 +298,4 @@
   </script>
 </body>
 </html>
+
