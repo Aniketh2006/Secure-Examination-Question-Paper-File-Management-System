@@ -1,214 +1,300 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Question Paper Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* Paste your style.css content here */
-        * { font-family: 'Inter', sans-serif; }
-        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
-        .group:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
-        @media (max-width: 640px) { .container { padding: 1rem !important; } #filesContainer { grid-template-columns: repeat(2, 1fr) !important; gap: 1rem !important; } .group { height: 140px !important; padding: 1rem !important; } .text-4xl { font-size: 2rem !important; } }
-        .fa-folder { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .group:hover .fa-folder { color: #f59e0b !important; transform: scale(1.15) rotate(5deg); }
-        .group:hover .fa-file-pdf { color: #dc2626 !important; transform: scale(1.1); }
-        #loginModal { backdrop-filter: blur(20px); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-        #loginModal > div { animation: slideUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Question Paper Manager</title>
+  <!-- UI libraries -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+    .group:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    @media (max-width: 640px) {
+      .container { padding: 1rem !important; }
+      #filesContainer { grid-template-columns: repeat(2,1fr) !important; gap: 1rem !important; }
+      .group { height: 140px !important; padding: 1rem !important; }
+      .text-4xl { font-size: 2rem !important; }
+    }
+    .fa-folder { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+    .group:hover .fa-folder { color:#f59e0b !important; transform: scale(1.15) rotate(5deg); }
+    .group:hover .fa-file-pdf { color:#dc2626 !important; transform: scale(1.1); }
+    #loginModal { backdrop-filter: blur(20px); }
+    @keyframes slideUp { from{opacity:0;transform:translateY(30px);} to{opacity:1;transform:translateY(0);} }
+    #loginModal > div { animation: slideUp 0.4s cubic-bezier(0.25,0.46,0.45,0.94); }
+  </style>
 </head>
 <body class="min-h-screen">
-    <!-- SAME HTML STRUCTURE as before -->
-    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4">
-            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Student Login</h2>
-            <form id="loginForm">
-                <div class="mb-4">
-                    <input type="email" id="email" placeholder="Student Email" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                <div class="mb-6">
-                    <input type="password" id="password" placeholder="Password" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">Login</button>
-            </form>
-            <p class="text-center mt-4 text-sm text-gray-600">New? <a href="#" id="signupLink" class="text-blue-600 font-semibold">Sign Up</a></p>
+
+  <!-- Login / Signup modal -->
+  <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4" id="authCard">
+      <h2 id="authTitle" class="text-2xl font-bold text-gray-800 mb-6 text-center">Student Login</h2>
+
+      <form id="loginForm">
+        <div class="mb-4">
+          <input type="email" id="email" placeholder="Student Email"
+                 class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
         </div>
-    </div>
-
-    <div class="container mx-auto px-4 py-8 max-w-6xl" id="mainApp" style="display:none;">
-        <div class="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl p-8 mb-8">
-            <div class="flex flex-col md:flex-row gap-4 items-center justify-between mb-8">
-                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    <i class="fas fa-file-archive mr-3"></i>Question Paper Manager
-                </h1>
-                <div class="flex items-center space-x-3">
-                    <span id="userEmail" class="text-sm bg-blue-100 px-3 py-1 rounded-full font-medium"></span>
-                    <button id="logoutBtn" class="bg-red-500 text-white px-6 py-2 rounded-xl font-semibold hover:bg-red-600">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                    </button>
-                </div>
-            </div>
-
-            <div class="flex flex-col lg:flex-row gap-4 mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl">
-                <nav id="breadcrumb" class="flex flex-wrap items-center text-sm font-medium text-gray-700 space-x-2"></nav>
-                <div class="flex flex-wrap gap-2">
-                    <button id="backBtn" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-blue-700 flex items-center space-x-2">
-                        <i class="fas fa-arrow-left"></i><span>Back</span>
-                    </button>
-                    <label id="uploadBtn" class="bg-green-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-green-700 cursor-pointer flex items-center space-x-2">
-                        <i class="fas fa-upload"></i><span>Upload</span>
-                        <input type="file" id="fileInput" accept=".pdf" class="hidden">
-                    </label>
-                    <button id="newFolderBtn" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 flex items-center space-x-2">
-                        <i class="fas fa-folder-plus"></i><span>New Folder</span>
-                    </button>
-                </div>
-            </div>
-
-            <div id="folderForm" class="bg-white rounded-2xl p-6 mb-8 shadow-lg hidden border-2 border-dashed border-gray-300">
-                <h3 class="text-xl font-bold mb-4 text-gray-800">Create Folder Structure</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <select id="yearSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-                        <option value="">Select Year</option><option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option>
-                    </select>
-                    <select id="semSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-                        <option value="">Semester</option><option value="SEM1">SEM 1</option><option value="SEM3">SEM 3</option><option value="SEM5">SEM 5</option>
-                    </select>
-                    <select id="branchSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-                        <option value="">Branch</option><option value="CSE">CSE</option><option value="ECE">ECE</option><option value="ME">Mechanical</option>
-                    </select>
-                    <input id="subjectInput" placeholder="Subject (e.g., OS)" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div class="flex gap-3 mt-6">
-                    <button id="createFolderBtn" class="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700">Create Folder</button>
-                    <button id="cancelFolderBtn" class="px-6 bg-gray-500 text-white py-3 rounded-xl font-semibold hover:bg-gray-600">Cancel</button>
-                </div>
-            </div>
-
-            <div id="filesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                <!-- Files load here -->
-            </div>
+        <div class="mb-6">
+          <input type="password" id="password" placeholder="Password"
+                 class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
         </div>
+        <button type="submit"
+                class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">
+          Login
+        </button>
+      </form>
+
+      <p class="text-center mt-4 text-sm text-gray-600">
+        New? <button id="goSignup" class="text-blue-600 font-semibold">Sign Up</button>
+      </p>
     </div>
+  </div>
 
-    
+  <!-- Main app -->
+  <div class="container mx-auto px-4 py-8 max-w-6xl" id="mainApp" style="display:none;">
+    <div class="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl p-8 mb-8">
+      <div class="flex flex-col md:flex-row gap-4 items-center justify-between mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          <i class="fas fa-file-archive mr-3"></i>Question Paper Manager
+        </h1>
+        <div class="flex items-center space-x-3">
+          <span id="userEmail" class="text-sm bg-blue-100 px-3 py-1 rounded-full font-medium"></span>
+          <button id="logoutBtn"
+                  class="bg-red-500 text-white px-6 py-2 rounded-xl font-semibold hover:bg-red-600">
+            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+          </button>
+        </div>
+      </div>
 
-    <script>
-        // ✅ SUPABASE CONFIG - UPDATE THESE 2 LINES
-     const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.supabase.co';
-     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw';
-     const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      <div class="flex flex-col lg:flex-row gap-4 mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl">
+        <nav id="breadcrumb" class="flex flex-wrap items-center text-sm font-medium text-gray-700 space-x-2"></nav>
+        <div class="flex flex-wrap gap-2">
+          <button id="backBtn"
+                  class="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-blue-700 flex items-center space-x-2">
+            <i class="fas fa-arrow-left"></i><span>Back</span>
+          </button>
+          <label class="bg-green-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-green-700 cursor-pointer flex items-center space-x-2">
+            <i class="fas fa-upload"></i><span>Upload</span>
+            <input type="file" id="fileInput" accept=".pdf" class="hidden">
+          </label>
+          <button id="newFolderBtn"
+                  class="bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 flex items-center space-x-2">
+            <i class="fas fa-folder-plus"></i><span>New Folder</span>
+          </button>
+        </div>
+      </div>
 
+      <div id="folderForm"
+           class="bg-white rounded-2xl p-6 mb-8 shadow-lg hidden border-2 border-dashed border-gray-300">
+        <h3 class="text-xl font-bold mb-4 text-gray-800">Create Folder Structure</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <select id="yearSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+            <option value="">Select Year</option>
+            <option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option>
+          </select>
+          <select id="semSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+            <option value="">Semester</option>
+            <option value="SEM1">SEM 1</option><option value="SEM3">SEM 3</option><option value="SEM5">SEM 5</option>
+          </select>
+          <select id="branchSelect" class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+            <option value="">Branch</option>
+            <option value="CSE">CSE</option><option value="ECE">ECE</option><option value="ME">Mechanical</option>
+          </select>
+          <input id="subjectInput" placeholder="Subject (e.g., OS)"
+                 class="p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="flex gap-3 mt-6">
+          <button id="createFolderBtn"
+                  class="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700">
+            Create Folder
+          </button>
+          <button id="cancelFolderBtn"
+                  class="px-6 bg-gray-500 text-white py-3 rounded-xl font-semibold hover:bg-gray-600">
+            Cancel
+          </button>
+        </div>
+      </div>
 
-        let currentPath = [], user = null;
+      <div id="filesContainer"
+           class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+      </div>
+    </div>
+  </div>
 
-        // ALL FUNCTIONS HERE (same as script.js but inline)
-        document.addEventListener('DOMContentLoaded', async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) { user = session.user; showMainApp(); loadFiles(); }
-            setupEventListeners();
-        });
+  <!-- Main script -->
+  <script>
+    // Supabase config (your project)
+    const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.supabase.co';
+    const SUPABASE_ANON_KEY =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw';
 
-        function showMainApp() {
-            document.getElementById('loginModal').style.display = 'none';
-            document.getElementById('mainApp').style.display = 'block';
-            document.getElementById('userEmail').textContent = user.email;
-        }
+    // IMPORTANT: use window.supabase, not Supabase
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        function setupEventListeners() {
-            document.getElementById('loginForm').addEventListener('submit', login);
-            document.getElementById('signupLink').onclick = toggleSignup;
-            document.getElementById('logoutBtn').onclick = logout;
-            document.getElementById('fileInput').onchange = handleUpload;
-            document.getElementById('newFolderBtn').onclick = () => document.getElementById('folderForm').classList.toggle('hidden');
-            document.getElementById('createFolderBtn').onclick = createFolder;
-            document.getElementById('cancelFolderBtn').onclick = () => document.getElementById('folderForm').classList.add('hidden');
-            document.getElementById('backBtn').onclick = () => { if (currentPath.length > 0) { currentPath.pop(); loadFiles(); } };
-        }
+    let currentPath = [];
+    let user = null;
 
-        async function login(e) { 
-            e.preventDefault(); 
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) return alert('Login failed: ' + error.message);
-            user = data.user; showMainApp(); loadFiles();
-        }
+    document.addEventListener('DOMContentLoaded', async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        user = session.user;
+        showMainApp();
+        loadFiles();
+      }
+      setupAuthListeners();
+      setupAppListeners();
+      updateBreadcrumb();
+    });
 
-        async function logout() { await supabase.auth.signOut(); location.reload(); }
+    function showMainApp() {
+      document.getElementById('loginModal').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      document.getElementById('userEmail').textContent = user.email;
+    }
 
-        async function handleUpload(e) {
-            const file = e.target.files[0];
-            const path = [...currentPath, file.name].join('/');
-            const { error } = await supabase.storage.from('question-papers').upload(path, file);
-            if (error) alert('Upload failed: ' + error.message);
-            else { loadFiles(); e.target.value = ''; alert('Uploaded!'); }
-        }
+    // ---------- Auth ----------
+    function setupAuthListeners() {
+      document.getElementById('loginForm').addEventListener('submit', login);
+      document.getElementById('goSignup').addEventListener('click', switchToSignup);
+    }
 
-        async function createFolder() {
-            const year = document.getElementById('yearSelect').value;
-            const sem = document.getElementById('semSelect').value;
-            const branch = document.getElementById('branchSelect').value;
-            const subject = document.getElementById('subjectInput').value;
-            if (!year || !sem || !branch || !subject) return alert('Fill all fields');
-            
-            const path = `${year}/${sem}/${branch}/${subject}/.keep`;
-            const { error } = await supabase.storage.from('question-papers').upload(path, new Blob(['folder']));
-            if (error) alert('Folder failed: ' + error.message);
-            else { loadFiles(); document.getElementById('folderForm').classList.add('hidden'); alert('Folder created!'); }
-        }
+    async function login(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { alert('Login failed: ' + error.message); return; }
+      user = data.user;
+      showMainApp();
+      loadFiles();
+    }
 
-        async function loadFiles() {
-            updateBreadcrumb();
-            const { data, error } = await supabase.storage.from('question-papers').list(currentPath.join('/'));
-            if (error) return console.error(error);
-            
-            const container = document.getElementById('filesContainer');
-            container.innerHTML = data.map(item => {
-                const isFolder = item.name.endsWith('.keep') || item.name.endsWith('/');
-                return `<div class="group bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border hover:border-blue-200 cursor-pointer h-48 flex flex-col items-center justify-center text-center" 
-                    onclick="${isFolder ? `currentPath.push('${item.name.replace('.keep', '')}'); loadFiles();` : `downloadFile('${item.name}')`}">
-                    <i class="fas ${isFolder ? 'fa-folder' : 'fa-file-pdf'} text-4xl mb-4 text-${isFolder ? 'yellow' : 'red'}-500 group-hover:scale-110"></i>
-                    <div class="font-semibold text-gray-800 mb-2 truncate w-full px-2">${item.name.replace('.keep', '')}</div>
-                </div>`;
-            }).join('');
-        }
+    function switchToSignup() {
+      const card = document.getElementById('authCard');
+      card.innerHTML = `
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Student Sign Up</h2>
+        <form id="signupForm">
+          <div class="mb-4">
+            <input type="email" id="signupEmail" placeholder="Student Email"
+                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
+          </div>
+          <div class="mb-6">
+            <input type="password" id="signupPassword" placeholder="Password"
+                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
+          </div>
+          <button type="submit"
+                  class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">
+            Sign Up
+          </button>
+        </form>
+        <p class="text-center mt-4 text-sm text-gray-600">
+          Already have an account?
+          <button id="goLogin" class="text-blue-600 font-semibold">Login</button>
+        </p>
+      `;
+      document.getElementById('signupForm').addEventListener('submit', signup);
+      document.getElementById('goLogin').addEventListener('click', () => location.reload());
+    }
 
-        function updateBreadcrumb() {
-            const bc = document.getElementById('breadcrumb');
-            bc.innerHTML = '<i class="fas fa-home text-blue-600 mr-2"></i>';
-            currentPath.forEach((part, i) => {
-                bc.innerHTML += `<span class="hover:text-blue-600 cursor-pointer" onclick="currentPath = currentPath.slice(0,${i+1}); loadFiles();">${part.replace('.keep', '')} <i class="fas fa-chevron-right mx-1 text-gray-400"></i></span>`;
-            });
-        }
+    async function signup(e) {
+      e.preventDefault();
+      const email = document.getElementById('signupEmail').value;
+      const password = document.getElementById('signupPassword').value;
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) { alert('Signup failed: ' + error.message); return; }
+      alert('Signup success. Check email if confirmation is required, then reload and login.');
+    }
 
-        async function downloadFile(filename) {
-            const { data } = await supabase.storage.from('question-papers').createSignedUrl(currentPath.join('/') + '/' + filename, 60);
-            const a = document.createElement('a'); a.href = data.signedURL; a.download = filename; a.click();
-        }
+    // ---------- App controls ----------
+    function setupAppListeners() {
+      document.getElementById('logoutBtn').onclick = async () => {
+        await supabase.auth.signOut();
+        location.reload();
+      };
+      document.getElementById('fileInput').onchange = handleUpload;
+      document.getElementById('newFolderBtn').onclick =
+        () => document.getElementById('folderForm').classList.toggle('hidden');
+      document.getElementById('createFolderBtn').onclick = createFolder;
+      document.getElementById('cancelFolderBtn').onclick =
+        () => document.getElementById('folderForm').classList.add('hidden');
+      document.getElementById('backBtn').onclick = () => {
+        if (currentPath.length > 0) { currentPath.pop(); loadFiles(); }
+      };
+    }
 
-        function toggleSignup() {
-            const form = document.getElementById('loginForm');
-            form.innerHTML = `<h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Sign Up</h2>
-                <form id="signupForm"><input type="email" id="signupEmail" placeholder="Email" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-4" required>
-                <input type="password" id="signupPassword" placeholder="Password" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-6" required>
-                <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">Sign Up</button></form>
-                <p class="text-center mt-4 text-sm">Back to <a href="#" id="loginLink" class="text-blue-600">Login</a></p>`;
-            document.getElementById('signupForm').onsubmit = async (e) => {
-                e.preventDefault();
-                const { error } = await supabase.auth.signUp({
-                    email: document.getElementById('signupEmail').value,
-                    password: document.getElementById('signupPassword').value
-                });
-                if (error) alert(error.message); else alert('Check email to verify!');
-            };
-        }
-    </script>
+    async function handleUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const path = [...currentPath, file.name].join('/');
+      const { error } = await supabase.storage.from('question-papers').upload(path, file);
+      if (error) alert('Upload failed: ' + error.message);
+      else { loadFiles(); e.target.value = ''; alert('Uploaded!'); }
+    }
+
+    async function createFolder() {
+      const year = document.getElementById('yearSelect').value;
+      const sem = document.getElementById('semSelect').value;
+      const branch = document.getElementById('branchSelect').value;
+      const subject = document.getElementById('subjectInput').value;
+      if (!year || !sem || !branch || !subject) { alert('Fill all fields'); return; }
+      const path = `${year}/${sem}/${branch}/${subject}/.keep`;
+      const { error } = await supabase.storage.from('question-papers')
+        .upload(path, new Blob(['folder']));
+      if (error) alert('Folder failed: ' + error.message);
+      else { loadFiles(); document.getElementById('folderForm').classList.add('hidden'); alert('Folder created!'); }
+    }
+
+    async function loadFiles() {
+      updateBreadcrumb();
+      const { data, error } = await supabase.storage.from('question-papers')
+        .list(currentPath.join('/'));
+      if (error) { console.error(error); return; }
+      const container = document.getElementById('filesContainer');
+      container.innerHTML = data.map(item => {
+        const isFolder = item.name.endsWith('.keep') || item.name.endsWith('/');
+        const click = isFolder
+          ? `navigateFolder('${item.name.replace('.keep','')}')`
+          : `downloadFile('${item.name}')`;
+        return `
+          <div class="group bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border hover:border-blue-200 cursor-pointer h-48 flex flex-col items-center justify-center text-center"
+               onclick="${click}">
+            <i class="fas ${isFolder ? 'fa-folder' : 'fa-file-pdf'} text-4xl mb-4 text-${isFolder ? 'yellow' : 'red'}-500"></i>
+            <div class="font-semibold text-gray-800 mb-2 truncate w-full px-2">${item.name.replace('.keep','')}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function navigateFolder(name) {
+      currentPath.push(name.replace('/',''));
+      loadFiles();
+    }
+
+    function updateBreadcrumb() {
+      const bc = document.getElementById('breadcrumb');
+      bc.innerHTML = '<i class="fas fa-home text-blue-600 mr-2"></i>';
+      currentPath.forEach((part, i) => {
+        bc.innerHTML += `<span class="hover:text-blue-600 cursor-pointer"
+                            onclick="currentPath = currentPath.slice(0,${i+1}); loadFiles();">
+                          ${part} <i class="fas fa-chevron-right mx-1 text-gray-400"></i>
+                        </span>`;
+      });
+    }
+
+    async function downloadFile(filename) {
+      const fullPath = currentPath.join('/') + '/' + filename;
+      const { data, error } = await supabase.storage.from('question-papers')
+        .createSignedUrl(fullPath, 60);
+      if (error) { alert('Download failed: ' + error.message); return; }
+      const a = document.createElement('a');
+      a.href = data.signedURL;
+      a.download = filename;
+      a.click();
+    }
+  </script>
 </body>
 </html>
-
