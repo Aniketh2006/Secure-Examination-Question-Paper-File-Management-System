@@ -6,7 +6,7 @@
   <title>Student Question Paper Manager</title>
   <!-- UI libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@sbClient/sbClient-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -129,12 +129,12 @@
   <!-- Main script -->
   <script>
     // Supabase config (your project)
-    const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.sbClient.co';
+    const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.supabase.co';
     const SUPABASE_ANON_KEY =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw';
 
     // IMPORTANT: use window.sbClient, not Supabase
-    const sbClient = window.sbClient.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentPath = [];
     let user = null;
@@ -298,4 +298,5 @@
   </script>
 </body>
 </html>
+
 
