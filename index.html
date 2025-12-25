@@ -357,8 +357,11 @@
 
       const { error } = await sb.storage.from('question-papers')
         .upload(folderPath, new Blob(['folder'], { type: 'text/plain' }));
-      if (error) { alert('Folder failed: ' + error.message); }
-      else {
+      if (error) {
+        alert('Folder failed: ' + error.message);
+      } else {
+        // Always go back to root after creating a new structure
+        currentPath = [];
         await loadFiles();
         document.getElementById('folderForm').classList.add('hidden');
         document.querySelectorAll('#folderForm select, #folderForm input')
@@ -367,50 +370,53 @@
       }
     }
 
- async function loadFiles() {
-  updateBreadcrumb();
+    async function loadFiles() {
+      updateBreadcrumb();
+    
+      const prefix = currentPath.join('/');
+      const { data, error } = await sb.storage
+        .from('question-papers')
+        .list(prefix || '', {
+          limit: 200,
+          sortBy: { column: 'name', order: 'asc' }
+        });
+    
+      if (error) { console.error(error); return; }
+    
+      const container = document.getElementById('filesContainer');
+    
+      if (!data || data.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
+            <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
+            <p>No items here yet. Create a folder or upload a PDF.</p>
+          </div>`;
+        return;
+      }
+    
+      container.innerHTML = data.map(item => {
+        // Supabase "folders" are prefixes; our .keep file marks a folder leaf
+        const isFolder = item.name.endsWith('/') || item.name.endsWith('.keep');
+    
+        // Show only the segment name
+        const cleanName = item.name.replace('.keep', '').replace('/', '');
+    
+        const iconClass = isFolder ? 'fa-folder' : 'fa-file-pdf';
+        const iconColor = isFolder ? 'text-amber-400' : 'text-rose-400';
+    
+        const click = isFolder
+          ? `navigateFolder('${cleanName}')`
+          : `downloadFile('${item.name}')`;
+    
+        return `
+          <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200"
+               onclick="${click}">
+            <i class="fa-solid ${iconClass} ${iconColor} text-3xl mb-3"></i>
+            <div class="text-xs font-medium text-slate-100 truncate w-full">${cleanName}</div>
+          </div>`;
+      }).join('');
+    }
 
-  // prefix = current folder ("" at root, "SEM3", "SEM3/CSE", etc.)
-  const prefix = currentPath.join('/');
-  const { data, error } = await sb.storage
-    .from('question-papers')
-    .list(prefix || '', { limit: 200 });
-  if (error) { console.error(error); return; }
-
-  const container = document.getElementById('filesContainer');
-
-  if (!data || data.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
-        <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
-        <p>No items here yet. Create a folder or upload a PDF.</p>
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = data.map(item => {
-    // Supabase represents "folders" as prefixes and our .keep files
-    const isFolder = item.name.endsWith('/') || item.name.endsWith('.keep');
-
-    // Remove .keep and trailing slash so only the segment name shows
-    const cleanName = item.name.replace('.keep', '').replace('/', '');
-
-    const iconClass = isFolder ? 'fa-folder' : 'fa-file-pdf';
-    const iconColor = isFolder ? 'text-amber-400' : 'text-rose-400';
-
-    // If folder, go one level deeper; if file, download
-    const click = isFolder
-      ? `navigateFolder('${cleanName}')`
-      : `downloadFile('${item.name}')`;
-
-    return `
-      <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200"
-           onclick="${click}">
-        <i class="fa-solid ${iconClass} ${iconColor} text-3xl mb-3"></i>
-        <div class="text-xs font-medium text-slate-100 truncate w-full">${cleanName}</div>
-      </div>`;
-  }).join('');
-}
 
     function navigateFolder(name) {
       if (!name) return;
@@ -455,4 +461,5 @@
   </script>
 </body>
 </html>
+
 
