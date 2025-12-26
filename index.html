@@ -23,9 +23,7 @@
       backdrop-filter: blur(20px);
       border: 1px solid rgba(148,163,184,0.35);
     }
-    .floating {
-      animation: float 8s ease-in-out infinite;
-    }
+    .floating { animation: float 8s ease-in-out infinite; }
     @keyframes float {
       0%,100% { transform: translateY(0px); }
       50% { transform: translateY(-12px); }
@@ -174,7 +172,6 @@
           <select id="yearSelect"
                   class="px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-700 text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
             <option value="">Year</option>
-            <!-- 2015–2025 -->
             <option value="2015">2015</option>
             <option value="2016">2016</option>
             <option value="2017">2017</option>
@@ -220,23 +217,26 @@
 
   <!-- Main script -->
   <script>
-    // 1) Supabase config – REPLACE with your actual URL + anon key
+    // 1) Supabase config (project yzdbskvnfoogboeuxtyi) [web:194]
     const SUPABASE_URL = 'https://yzdbskvnfoogboeuxtyi.supabase.co';
     const SUPABASE_ANON_KEY =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw';
 
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,   // force login every reload [web:291]
+        autoRefreshToken: false
+      }
+    });
 
     let currentPath = [];
     let user = null;
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) {
-        user = session.user;
-        showMainApp();
-        await loadFiles();
-      }
+    // Always show login on load (no auto session restore)
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('loginModal').classList.remove('hidden');
+      document.getElementById('mainApp').classList.add('hidden');
+
       setupAuthListeners();
       setupAppListeners();
       updateBreadcrumb();
@@ -252,10 +252,15 @@
       e.preventDefault();
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
+
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) { alert('Login failed: ' + error.message); return; }
+      if (error) {
+        alert('Login failed: ' + error.message);
+        return;
+      }
       user = data.user;
       showMainApp();
+      currentPath = [];
       await loadFiles();
     }
 
@@ -300,7 +305,10 @@
       const email = document.getElementById('signupEmail').value;
       const password = document.getElementById('signupPassword').value;
       const { error } = await sb.auth.signUp({ email, password });
-      if (error) { alert('Signup failed: ' + error.message); return; }
+      if (error) {
+        alert('Signup failed: ' + error.message);
+        return;
+      }
       alert('Signup success. Verify email if required, then reload and login.');
     }
 
@@ -315,8 +323,8 @@
     // ---------- App controls ----------
     function setupAppListeners() {
       document.getElementById('logoutBtn').onclick = async () => {
-        await sb.auth.signOut();
-        location.reload();
+        await sb.auth.signOut();   // clear server-side session [web:280]
+        location.reload();         // forces login again
       };
       document.getElementById('fileInput').onchange = handleUpload;
       document.getElementById('newFolderBtn').onclick =
@@ -360,7 +368,6 @@
       if (error) {
         alert('Folder failed: ' + error.message);
       } else {
-        // Always go back to root after creating a new structure
         currentPath = [];
         await loadFiles();
         document.getElementById('folderForm').classList.add('hidden');
@@ -370,73 +377,65 @@
       }
     }
 
-async function loadFiles() {
-  // Update breadcrumb UI for the current path
-  updateBreadcrumb();
+    // ---------- Load files / folders ----------
+    async function loadFiles() {
+      updateBreadcrumb();
 
-  // Build prefix from the currentPath array, e.g. "SEM3/CSE/2025"
-  const prefix = currentPath.join('/');
+      const prefix = currentPath.join('/');
 
-  // List items in Supabase Storage for this prefix
-  const { data, error } = await sb.storage
-    .from('question-papers')
-    .list(prefix || '', {
-      limit: 200,
-      sortBy: { column: 'name', order: 'asc' }
-    });
+      const { data, error } = await sb.storage
+        .from('question-papers')
+        .list(prefix || '', {
+          limit: 200,
+          sortBy: { column: 'name', order: 'asc' }
+        });
 
-  // DEBUG: see exactly what Supabase is returning
-  console.log('prefix =', `"${prefix}"`, 'data =', data, 'error =', error);
+      // TEMP debug log – keep for now
+      console.log('prefix =', `"${prefix}"`, 'data =', data, 'error =', error);
 
-  if (error) {
-    console.error('Error loading files:', error.message);
-    return;
-  }
+      if (error) {
+        console.error('Error loading files:', error.message);
+        return;
+      }
 
-  const container = document.getElementById('filesContainer');
+      const container = document.getElementById('filesContainer');
 
-  // If no items, show empty‑state message
-  if (!data || data.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
-        <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
-        <p>No items here yet. Create a folder or upload a PDF.</p>
-      </div>
-    `;
-    return;
-  }
+      if (!data || data.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
+            <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
+            <p>No items here yet. Create a folder or upload a PDF.</p>
+          </div>
+        `;
+        return;
+      }
 
-  // Render folders/files grid
-  container.innerHTML = data.map(item => {
-    // .list gives objects like { name, id, created_at, updated_at, ... }
-    // Treat items that end with '/' as folders, files otherwise
-    const isFolder = item.name.endsWith('/');
+      container.innerHTML = data.map(item => {
+        // Supabase v2: folders have type === 'folder' [web:247]
+        const isFolder = item.type === 'folder';
 
-    const iconClass = isFolder ? 'fa-folder' : 'fa-file-pdf';
-    const iconColor = isFolder ? 'text-amber-400' : 'text-rose-400';
+        const iconClass = isFolder ? 'fa-folder' : 'fa-file-pdf';
+        const iconColor = isFolder ? 'text-amber-400' : 'text-rose-400';
 
-    const displayName = item.name.replace(/\/$/, ''); // strip trailing '/'
+        const displayName = item.name.replace(/\/$/, '');
 
-    const onClick = isFolder
-      ? `navigateFolder('${displayName}')`
-      : `downloadFile('${item.name}')`;
+        const onClick = isFolder
+          ? `navigateFolder('${displayName}')`
+          : `downloadFile('${item.name}')`;
 
-    return `
-      <div
-        class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
-        onclick="${onClick}"
-      >
-        <i class="fa-solid ${iconClass} ${iconColor} text-3xl mb-3"></i>
-        <div class="text-xs font-medium text-slate-100 truncate w-full">
-          ${displayName}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-
-
+        return `
+          <div
+            class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
+            onclick="${onClick}"
+          >
+            <i class="fa-solid ${iconClass} ${iconColor} text-3xl mb-3"></i>
+            <div class="text-xs font-medium text-slate-100 truncate w-full">
+              ${displayName}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     function navigateFolder(name) {
       if (!name) return;
@@ -463,25 +462,20 @@ async function loadFiles() {
       bc.innerHTML = html;
     }
 
-   async function downloadFile(filename) {
-  // filename here is only the last part (e.g. "os-midsem.pdf")
-  const fullPath = [...currentPath, filename].join('/');
-  const { data, error } = await sb.storage
-    .from('question-papers')
-    .createSignedUrl(fullPath, 60);
-  if (error) {
-    alert('Download failed: ' + error.message);
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = data.signedURL;
-  a.download = filename;
-  a.click();
-}
+    async function downloadFile(filename) {
+      const fullPath = [...currentPath, filename].join('/');
+      const { data, error } = await sb.storage
+        .from('question-papers')
+        .createSignedUrl(fullPath, 60);
+      if (error) {
+        alert('Download failed: ' + error.message);
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = data.signedURL;
+      a.download = filename;
+      a.click();
+    }
   </script>
 </body>
 </html>
-
-
-
-
