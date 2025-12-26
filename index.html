@@ -371,10 +371,13 @@
     }
 
 async function loadFiles() {
+  // Update breadcrumb UI for the current path
   updateBreadcrumb();
 
+  // Build prefix from the currentPath array, e.g. "SEM3/CSE/2025"
   const prefix = currentPath.join('/');
 
+  // List items in Supabase Storage for this prefix
   const { data, error } = await sb.storage
     .from('question-papers')
     .list(prefix || '', {
@@ -382,47 +385,56 @@ async function loadFiles() {
       sortBy: { column: 'name', order: 'asc' }
     });
 
-  // DEBUG: see what Supabase is actually returning
+  // DEBUG: see exactly what Supabase is returning
   console.log('prefix =', `"${prefix}"`, 'data =', data, 'error =', error);
 
   if (error) {
-    console.error(error);
+    console.error('Error loading files:', error.message);
     return;
   }
 
   const container = document.getElementById('filesContainer');
 
+  // If no items, show empty‑state message
   if (!data || data.length === 0) {
     container.innerHTML = `
       <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
         <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
         <p>No items here yet. Create a folder or upload a PDF.</p>
-      </div>`;
+      </div>
+    `;
     return;
   }
 
+  // Render folders/files grid
   container.innerHTML = data.map(item => {
-    // Supabase "folders" are prefixes; our .keep file marks a folder leaf
-    const isFolder = item.name.endsWith('/') || item.name.endsWith('.keep');
-
-    // Show only the segment name
-    const cleanName = item.name.replace('.keep', '').replace('/', '');
+    // .list gives objects like { name, id, created_at, updated_at, ... }
+    // Treat items that end with '/' as folders, files otherwise
+    const isFolder = item.name.endsWith('/');
 
     const iconClass = isFolder ? 'fa-folder' : 'fa-file-pdf';
     const iconColor = isFolder ? 'text-amber-400' : 'text-rose-400';
 
-    const click = isFolder
-      ? `navigateFolder('${cleanName}')`
+    const displayName = item.name.replace(/\/$/, ''); // strip trailing '/'
+
+    const onClick = isFolder
+      ? `navigateFolder('${displayName}')`
       : `downloadFile('${item.name}')`;
 
     return `
-      <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200"
-           onclick="${click}">
+      <div
+        class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
+        onclick="${onClick}"
+      >
         <i class="fa-solid ${iconClass} ${iconColor} text-3xl mb-3"></i>
-        <div class="text-xs font-medium text-slate-100 truncate w-full">${cleanName}</div>
-      </div>`;
+        <div class="text-xs font-medium text-slate-100 truncate w-full">
+          ${displayName}
+        </div>
+      </div>
+    `;
   }).join('');
 }
+
 
 
 
@@ -469,6 +481,7 @@ async function loadFiles() {
   </script>
 </body>
 </html>
+
 
 
 
