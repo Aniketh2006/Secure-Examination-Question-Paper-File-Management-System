@@ -25,7 +25,9 @@
     let currentPath = [];
     let user = null;
 
-    const learnerRegex = /^st.+@learner\.manipal\.edu$/i; // learner mails only [web:469]
+    // NEW: any username, but must be @learner.manipal.edu
+    const learnerRegex = /^[^@]+@learner\.manipal\.edu$/i;
+
 
     document.addEventListener("DOMContentLoaded", () => {
       setupAuthListeners();
@@ -538,3 +540,4 @@
   </div>
 </body>
 </html>
+
