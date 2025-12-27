@@ -14,25 +14,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
 
   <script>
-    // ---------- 1) Supabase config ----------
+    // ---------- Supabase config ----------
     const SUPABASE_URL = "https://yzdbskvnfoogboeuxtyi.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw";
 
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const BUCKET = "question-papers";
 
-    // currentPath is from bucket ROOT
+    // bucket root path state
     let currentPath = [];
     let user = null;
 
-    // allow only st...@learner.manipal.edu
-    const learnerRegex = /^st.+@learner\.manipal\.edu$/i; // [web:434]
+    const learnerRegex = /^st.+@learner\.manipal\.edu$/i; // learner mails only [web:469]
 
     document.addEventListener("DOMContentLoaded", () => {
       setupAuthListeners();
@@ -44,40 +37,49 @@
       document.getElementById("userEmail").textContent = "";
     });
 
-    // ---------- 2) Auth (fake, but email-validated) ----------
+    // ---------- Auth ----------
     function setupAuthListeners() {
-      document.getElementById("loginForm").addEventListener("submit", login);
-      document.getElementById("goSignup").addEventListener("click", switchToSignup);
+      document.getElementById("loginForm").addEventListener("submit", loginWithSupabase);
+      document.getElementById("goSignup").addEventListener("click", showSignup);
     }
 
-    async function login(e) {
+    function showAuthError(msg) {
+      alert(msg);
+    }
+
+    async function loginWithSupabase(e) {
       e.preventDefault();
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value.trim();
 
       if (!email || !password) {
-        alert("Enter email and password.");
-        return;
+        return showAuthError("Enter email and password.");
       }
-
       if (!learnerRegex.test(email)) {
-        alert("Use your MIT learner ID (st...@learner.manipal.edu). Other emails cannot access this vault.");
-        return;
+        return showAuthError("Use your MIT learner ID (st...@learner.manipal.edu).");
       }
 
-      // demo auth: accept any password, but only if learner email
-      user = { email };
-      showMainApp();
+      const { data, error } = await sb.auth.signInWithPassword({
+        email,
+        password,
+      }); // [web:473]
+
+      if (error || !data.session) {
+        return showAuthError("No account found for this learner ID or wrong password. Sign up first.");
+      }
+
+      user = data.user;
+      showMainApp(user.email);
       currentPath = [];
       await loadFiles();
     }
 
-    function switchToSignup() {
+    function showSignup() {
       const card = document.getElementById("authCard");
       card.innerHTML = `
         <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Sign Up</h2>
         <p class="text-slate-400 text-xs text-center mb-6">
-          Sign up with your MIT learner email (st...@learner.manipal.edu) to access the vault.
+          Sign up with your MIT learner email (st...@learner.manipal.edu).
         </p>
         <form id="signupForm" class="space-y-4">
           <div>
@@ -105,39 +107,47 @@
         </p>
       `;
 
-      document.getElementById("signupForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-        const email = document.getElementById("signupEmail").value.trim();
-        const pwd = document.getElementById("signupPassword").value.trim();
-
-        if (!learnerRegex.test(email)) {
-          alert("Use your MIT learner ID (st...@learner.manipal.edu) for signup.");
-          return;
-        }
-        if (!pwd) {
-          alert("Enter a password.");
-          return;
-        }
-
-        // demo: no server signup; just tell them to login with same email/password
-        alert("Signup saved locally. Use the same learner email and password on the login screen.");
-        location.reload();
-      });
-
+      document.getElementById("signupForm").addEventListener("submit", signupWithSupabase);
       document.getElementById("goLogin").addEventListener("click", () => location.reload());
     }
 
-    function showMainApp() {
+    async function signupWithSupabase(e) {
+      e.preventDefault();
+      const email = document.getElementById("signupEmail").value.trim();
+      const password = document.getElementById("signupPassword").value.trim();
+
+      if (!email || !password) {
+        return showAuthError("Enter learner email and password.");
+      }
+      if (!learnerRegex.test(email)) {
+        return showAuthError("Signup allowed only for st...@learner.manipal.edu.");
+      }
+
+      const { data, error } = await sb.auth.signUp({
+        email,
+        password,
+      }); // [web:441]
+
+      if (error) {
+        return showAuthError(error.message || "Signup failed.");
+      }
+
+      alert("Signup successful. Check your email if confirmations are enabled, then login.");
+      location.reload();
+    }
+
+    function showMainApp(email) {
       document.getElementById("loginModal").classList.add("hidden");
       document.getElementById("mainApp").classList.remove("hidden");
       document.getElementById("userEmail").classList.remove("hidden");
       document.getElementById("logoutBtn").classList.remove("hidden");
-      document.getElementById("userEmail").textContent = user?.email || "";
+      document.getElementById("userEmail").textContent = email || "";
     }
 
-    // ---------- 3) App controls ----------
+    // ---------- App controls ----------
     function setupAppListeners() {
-      document.getElementById("logoutBtn").onclick = () => {
+      document.getElementById("logoutBtn").onclick = async () => {
+        await sb.auth.signOut(); // [web:447]
         user = null;
         location.reload();
       };
@@ -160,11 +170,11 @@
       };
     }
 
-    // --------- helper for current path string ----------
     function getCurrentPathString() {
       return currentPath.length === 0 ? "" : currentPath.join("/");
     }
 
+    // ---------- Storage: upload ----------
     async function handleUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -185,6 +195,7 @@
       }
     }
 
+    // ---------- Storage: create folder ----------
     async function createFolder() {
       const sem = document.getElementById("semSelect").value;
       const branch = document.getElementById("branchSelect").value;
@@ -217,7 +228,7 @@
       }
     }
 
-    // ---------- 4) List files/folders ----------
+    // ---------- Storage: list & display ----------
     async function loadFiles() {
       updateBreadcrumb();
 
@@ -307,7 +318,7 @@
       bc.innerHTML = html;
     }
 
-    // ---------- 5) Expose helpers ----------
+    // exposed helpers
     window.navigateFolder = (name) => {
       if (!name) return;
       currentPath.push(name);
@@ -519,7 +530,7 @@
         </div>
       </div>
 
-      <!-- File / folder grid (mobile-first, responsive) -->
+      <!-- File / folder grid -->
       <div id="filesContainer"
            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       </div>
