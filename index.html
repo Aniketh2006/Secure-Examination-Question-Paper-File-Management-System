@@ -14,7 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
 
   <script>
-    // ---------- 1) Supabase config (REPLACE) ----------
+    // ---------- 1) Supabase config ----------
     const SUPABASE_URL = "https://yzdbskvnfoogboeuxtyi.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw";
 
@@ -25,26 +25,26 @@
       },
     });
 
-    const BUCKET = "question-papers"; // hard-coded bucket name
+    const BUCKET = "question-papers";
 
-    // NOTE: currentPath is now from bucket ROOT
-    // []  -> root
-    // ["SEM3"] -> inside SEM3 folder, etc.
+    // currentPath is from bucket ROOT
     let currentPath = [];
     let user = null;
+
+    // allow only st...@learner.manipal.edu
+    const learnerRegex = /^st.+@learner\.manipal\.edu$/i; // [web:434]
 
     document.addEventListener("DOMContentLoaded", () => {
       setupAuthListeners();
       setupAppListeners();
       updateBreadcrumb();
 
-      // always show login first
       document.getElementById("loginModal").classList.remove("hidden");
       document.getElementById("mainApp").classList.add("hidden");
       document.getElementById("userEmail").textContent = "";
     });
 
-    // ---------- 2) Fake email/password auth using Supabase ----------
+    // ---------- 2) Auth (fake, but email-validated) ----------
     function setupAuthListeners() {
       document.getElementById("loginForm").addEventListener("submit", login);
       document.getElementById("goSignup").addEventListener("click", switchToSignup);
@@ -60,7 +60,12 @@
         return;
       }
 
-      // For demo: no real auth, just accept anything
+      if (!learnerRegex.test(email)) {
+        alert("Use your MIT learner ID (st...@learner.manipal.edu). Other emails cannot access this vault.");
+        return;
+      }
+
+      // demo auth: accept any password, but only if learner email
       user = { email };
       showMainApp();
       currentPath = [];
@@ -72,14 +77,14 @@
       card.innerHTML = `
         <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Sign Up</h2>
         <p class="text-slate-400 text-xs text-center mb-6">
-          For now, signup is just informational; any email/password will work on login.
+          Sign up with your MIT learner email (st...@learner.manipal.edu) to access the vault.
         </p>
         <form id="signupForm" class="space-y-4">
           <div>
-            <label class="block text-xs text-slate-400 mb-1">Email</label>
+            <label class="block text-xs text-slate-400 mb-1">Learner Email</label>
             <input type="email" id="signupEmail"
                    class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/70 text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                   placeholder="student@manipal.edu" required>
+                   placeholder="st123456@learner.manipal.edu" required>
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1">Password</label>
@@ -99,11 +104,26 @@
           </button>
         </p>
       `;
+
       document.getElementById("signupForm").addEventListener("submit", (e) => {
         e.preventDefault();
-        alert("Signup noted. Use your email/password on the login screen.");
+        const email = document.getElementById("signupEmail").value.trim();
+        const pwd = document.getElementById("signupPassword").value.trim();
+
+        if (!learnerRegex.test(email)) {
+          alert("Use your MIT learner ID (st...@learner.manipal.edu) for signup.");
+          return;
+        }
+        if (!pwd) {
+          alert("Enter a password.");
+          return;
+        }
+
+        // demo: no server signup; just tell them to login with same email/password
+        alert("Signup saved locally. Use the same learner email and password on the login screen.");
         location.reload();
       });
+
       document.getElementById("goLogin").addEventListener("click", () => location.reload());
     }
 
@@ -149,7 +169,6 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      // upload into the CURRENT folder (no forced SEM3)
       const baseSegments = [...currentPath];
       const path = baseSegments.length ? [...baseSegments, file.name].join("/") : file.name;
 
@@ -178,7 +197,6 @@
         return;
       }
 
-      // folder hierarchy rooted at bucket root: SEMx/BRANCH/YEAR/EXAM/SUBJECT
       const folderPath = `${sem}/${branch}/${year}/${examType}/${subject}/keep.txt`;
 
       const { error } = await sb.storage
@@ -233,7 +251,6 @@
       const folderCards = [];
       const fileCards = [];
 
-      // Supabase list() returns both files and "folders" (prefixes). [web:376]
       for (const item of data) {
         if (!item.name) continue;
         const isFolder = !item.name.includes(".");
@@ -252,7 +269,6 @@
           const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(fullPath); // [web:421]
           const url = pub.publicUrl;
 
-          // full-width row layout so fullName is readable
           fileCards.push(`
             <div class="col-span-full">
               <div class="bg-slate-900/70 border border-slate-700/70 rounded-xl px-4 py-3 flex items-center justify-between gap-3 cursor-pointer hover:border-sky-500/70 hover:bg-slate-900"
@@ -371,15 +387,15 @@
       <div id="authCard">
         <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Login</h2>
         <p class="text-slate-400 text-xs text-center mb-6">
-          Use your college email to access the question paper repository.
+          Use your MIT learner email (<span class="font-semibold">st...@learner.manipal.edu</span>) to access the repository.
         </p>
 
         <form id="loginForm" class="space-y-4">
           <div>
-            <label class="block text-xs text-slate-400 mb-1">Email</label>
+            <label class="block text-xs text-slate-400 mb-1">Learner Email</label>
             <input type="email" id="email"
                    class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/70 text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
-                   placeholder="student@manipal.edu" required>
+                   placeholder="st123456@learner.manipal.edu" required>
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1">Password</label>
@@ -503,7 +519,7 @@
         </div>
       </div>
 
-      <!-- File / folder grid -->
+      <!-- File / folder grid (mobile-first, responsive) -->
       <div id="filesContainer"
            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       </div>
