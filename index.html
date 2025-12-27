@@ -10,59 +10,38 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Firebase + App code -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import {
-      getAuth,
-      onAuthStateChanged,
-      signInWithEmailAndPassword,
-      createUserWithEmailAndPassword,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import {
-      getStorage,
-      ref,
-      uploadBytes,
-      getDownloadURL,
-      listAll
-    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
 
-    // ---------- 1) Firebase config ----------
-    const firebaseConfig = {
-      apiKey: "AIzaSyB1f9MxzzfxwOGF4DtsRurS3Ze10JRQLG4",
-      authDomain: "mit-question-vault.firebaseapp.com",
-      projectId: "mit-question-vault",
-      storageBucket: "mit-question-vault.firebasestorage.app",
-      messagingSenderId: "956482164050",
-      appId: "1:956482164050:web:bdd17b212ea8d5ba10968b",
-      measurementId: "G-J5CTJJ8DK9"
-    };
+  <script>
+    // ---------- 1) Supabase config (REPLACE) ----------
+    const SUPABASE_URL = "https://gfoszdtmyplrsdrdylkd.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable__zjPuuMd7KNciZhjEUlaWQ_gV1L4wj6";
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const storage = getStorage(app);
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
-    // ---------- 2) State ----------
+    const BUCKET = "question-papers"; // hard-coded bucket name
+
     let currentPath = [];   // inside SEM3
-    let currentUser = null;
+    let user = null;
 
-    // ---------- 3) DOM ready ----------
-    window.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", () => {
       setupAuthListeners();
       setupAppListeners();
       updateBreadcrumb();
 
+      // always show login first
       document.getElementById("loginModal").classList.remove("hidden");
       document.getElementById("mainApp").classList.add("hidden");
-
-      onAuthStateChanged(auth, (user) => {
-        currentUser = user;
-        document.getElementById("userEmail").textContent = user ? user.email : "";
-      });
+      document.getElementById("userEmail").textContent = "";
     });
 
-    // ---------- 4) Auth ----------
+    // ---------- 2) Fake email/password auth using Supabase ----------
     function setupAuthListeners() {
       document.getElementById("loginForm").addEventListener("submit", login);
       document.getElementById("goSignup").addEventListener("click", switchToSignup);
@@ -70,18 +49,19 @@
 
     async function login(e) {
       e.preventDefault();
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
 
-      try {
-        const cred = await signInWithEmailAndPassword(auth, email, password);
-        currentUser = cred.user;
-        showMainApp();
-        currentPath = [];
-        await loadFiles();
-      } catch (err) {
-        alert("Login failed: " + err.message);
+      if (!email || !password) {
+        alert("Enter email and password.");
+        return;
       }
+
+      // For demo: no real auth, just accept anything
+      user = { email };
+      showMainApp();
+      currentPath = [];
+      await loadFiles();
     }
 
     function switchToSignup() {
@@ -89,7 +69,7 @@
       card.innerHTML = `
         <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Sign Up</h2>
         <p class="text-slate-400 text-xs text-center mb-6">
-          Create an account with your student email to upload papers.
+          For now, signup is just informational; any email/password will work on login.
         </p>
         <form id="signupForm" class="space-y-4">
           <div>
@@ -116,21 +96,12 @@
           </button>
         </p>
       `;
-      document.getElementById("signupForm").addEventListener("submit", signup);
-      document.getElementById("goLogin").addEventListener("click", () => location.reload());
-    }
-
-    async function signup(e) {
-      e.preventDefault();
-      const email = document.getElementById("signupEmail").value;
-      const password = document.getElementById("signupPassword").value;
-      try {
-        await createUserWithEmailAndPassword(auth, email, password);
-        alert("Signup success. Now login with your credentials.");
+      document.getElementById("signupForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        alert("Signup noted. Use your email/password on the login screen.");
         location.reload();
-      } catch (err) {
-        alert("Signup failed: " + err.message);
-      }
+      });
+      document.getElementById("goLogin").addEventListener("click", () => location.reload());
     }
 
     function showMainApp() {
@@ -138,12 +109,13 @@
       document.getElementById("mainApp").classList.remove("hidden");
       document.getElementById("userEmail").classList.remove("hidden");
       document.getElementById("logoutBtn").classList.remove("hidden");
+      document.getElementById("userEmail").textContent = user?.email || "";
     }
 
-    // ---------- 5) App controls ----------
+    // ---------- 3) App controls ----------
     function setupAppListeners() {
-      document.getElementById("logoutBtn").onclick = async () => {
-        await signOut(auth);
+      document.getElementById("logoutBtn").onclick = () => {
+        user = null;
         location.reload();
       };
 
@@ -168,19 +140,20 @@
     async function handleUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
-      if (!currentUser) { alert("Please login first."); return; }
 
       const baseSegments = ["SEM3", ...currentPath];
       const path = [...baseSegments, file.name].join("/");
-      const fileRef = ref(storage, path);
 
-      try {
-        await uploadBytes(fileRef, file);
+      const { error } = await sb.storage.from(BUCKET).upload(path, file, {
+        upsert: true,
+      }); // [web:393]
+
+      if (error) {
+        alert("Upload failed: " + error.message);
+      } else {
         await loadFiles();
         e.target.value = "";
         alert("File uploaded.");
-      } catch (err) {
-        alert("Upload failed: " + err.message);
       }
     }
 
@@ -197,23 +170,25 @@
       }
 
       const folderPath = `SEM3/${sem}/${branch}/${year}/${examType}/${subject}/keep.txt`;
-      const dummyRef = ref(storage, folderPath);
-      const blob = new Blob(["folder"], { type: "text/plain" });
+      const { error } = await sb.storage
+        .from(BUCKET)
+        .upload(folderPath, new Blob(["folder"], { type: "text/plain" }), {
+          upsert: true,
+        }); // [web:393]
 
-      try {
-        await uploadBytes(dummyRef, blob);
+      if (error) {
+        alert("Folder failed: " + error.message);
+      } else {
         currentPath = [];
         await loadFiles();
         document.getElementById("folderForm").classList.add("hidden");
         document.querySelectorAll("#folderForm select, #folderForm input")
-          .forEach(el => el.value = "");
+          .forEach((el) => (el.value = ""));
         alert("Folder created.");
-      } catch (err) {
-        alert("Folder failed: " + err.message);
       }
     }
 
-    // ---------- 6) List files/folders ----------
+    // ---------- 4) List files/folders ----------
     async function loadFiles() {
       updateBreadcrumb();
 
@@ -221,47 +196,79 @@
         ? "SEM3"
         : ["SEM3", ...currentPath].join("/");
 
-      const listRef = ref(storage, base);
+      const { data, error } = await sb.storage
+        .from(BUCKET)
+        .list(base, { limit: 100, sortBy: { column: "name", order: "asc" } }); // [web:376][web:379]
 
-      try {
-        const res = await listAll(listRef);
-        const container = document.getElementById("filesContainer");
+      const container = document.getElementById("filesContainer");
 
-        if (res.prefixes.length === 0 && res.items.length === 0) {
-          container.innerHTML = `
-            <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
-              <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
-              <p>No items here yet. Create a folder or upload a PDF.</p>
-            </div>`;
-          return;
+      if (error) {
+        console.error(error);
+        container.innerHTML = `
+          <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
+            <i class="fa-regular fa-circle-xmark text-4xl mb-2"></i>
+            <p>Failed to load files.</p>
+          </div>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
+            <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
+            <p>No items here yet. Create a folder or upload a PDF.</p>
+          </div>`;
+        return;
+      }
+
+      const folderCards = [];
+      const fileCards = [];
+
+      for (const item of data) {
+        if (item.name.endsWith("/")) continue;
+
+        if (item.metadata && item.metadata.is_directory) {
+          // not used with current API, but keep for future
         }
 
-        const folderCards = res.prefixes.map(p => {
-          const name = p.name;
-          return `
-            <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
-                 onclick="navigateFolder('${name}')">
-              <i class="fa-solid fa-folder text-amber-400 text-3xl mb-3"></i>
-              <div class="text-xs font-medium text-slate-100 truncate w-full">${name}</div>
-            </div>`;
-        });
+        if (item.name.indexOf(".") === -1 && item.id === null) {
+          // would be directories in some SDKs
+        }
 
-        const fileCards = await Promise.all(res.items.map(async itemRef => {
-          const fullName = itemRef.name.split("/").pop();
-          const url = await getDownloadURL(itemRef);
-          return `
+        if (item.id === null && !item.name.includes(".")) {
+          // ignore
+        }
+
+        if (item.updated_at === null && item.created_at === null && item.metadata === null) {
+          // ignore
+        }
+      }
+
+      // Supabase list() does not separate folders/files: treat names that have no '.' as folders
+      for (const item of data) {
+        if (!item.name) continue;
+        const isFolder = !item.name.includes(".");
+        if (isFolder) {
+          folderCards.push(`
+            <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
+                 onclick="navigateFolder('${item.name}')">
+              <i class="fa-solid fa-folder text-amber-400 text-3xl mb-3"></i>
+              <div class="text-xs font-medium text-slate-100 truncate w-full">${item.name}</div>
+            </div>`);
+        } else {
+          const fullName = item.name;
+          const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(`${base}/${fullName}`); // [web:382]
+          const url = pub.publicUrl;
+          fileCards.push(`
             <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
                  onclick="downloadFromUrl('${url}','${fullName}')">
               <i class="fa-solid fa-file-pdf text-rose-400 text-3xl mb-3"></i>
               <div class="text-xs font-medium text-slate-100 truncate w-full">${fullName}</div>
-            </div>`;
-        }));
-
-        container.innerHTML = folderCards.concat(fileCards).join("");
-      } catch (err) {
-        console.error(err);
-        alert("Failed to load files: " + err.message);
+            </div>`);
+        }
       }
+
+      container.innerHTML = folderCards.concat(fileCards).join("");
     }
 
     function updateBreadcrumb() {
@@ -283,7 +290,7 @@
       bc.innerHTML = html;
     }
 
-    // ---------- 7) expose functions to window for inline onclick ----------
+    // ---------- 5) Expose helpers ----------
     window.navigateFolder = (name) => {
       if (!name) return;
       currentPath.push(name);
@@ -296,9 +303,6 @@
       a.download = filename;
       a.click();
     };
-
-    window.loadFiles = () => loadFiles();
-    window.createFolder = () => createFolder();
   </script>
 
   <style>
@@ -361,7 +365,7 @@
       </div>
     </div>
 
-    <!-- Login / Signup modal card -->
+    <!-- Login / Signup card -->
     <div id="loginModal" class="glass-card rounded-3xl p-8 md:p-10 max-w-md mx-auto mb-8">
       <div id="authCard">
         <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Login</h2>
@@ -397,7 +401,7 @@
       </div>
     </div>
 
-    <!-- Main app (hidden until login) -->
+    <!-- Main app -->
     <div id="mainApp" class="hidden glass-card rounded-3xl p-6 md:p-8 text-slate-50">
       <!-- Top controls -->
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
