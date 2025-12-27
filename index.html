@@ -5,11 +5,301 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MIT Manipal Question Paper Vault</title>
 
-  <!-- UI libraries -->
+  <!-- UI libs -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Firebase + App code -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getAuth,
+      onAuthStateChanged,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import {
+      getStorage,
+      ref,
+      uploadBytes,
+      getDownloadURL,
+      listAll
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
+
+    // ---------- 1) Firebase config: YOUR VALUES ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyB1f9MxzzfxwOGF4DtsRurS3Ze10JRQLG4",
+      authDomain: "mit-question-vault.firebaseapp.com",
+      projectId: "mit-question-vault",
+      storageBucket: "mit-question-vault.firebasestorage.app",
+      messagingSenderId: "956482164050",
+      appId: "1:956482164050:web:bdd17b212ea8d5ba10968b",
+      measurementId: "G-J5CTJJ8DK9"
+    };
+
+    const app = initializeApp(firebaseConfig);          // [web:329]
+    const auth = getAuth(app);                          // [web:336]
+    const storage = getStorage(app);                    // [web:329]
+
+    // ---------- 2) State ----------
+    let currentPath = [];   // inside SEM3
+    let currentUser = null;
+
+    // ---------- 3) DOM ready ----------
+    window.addEventListener("DOMContentLoaded", () => {
+      setupAuthListeners();
+      setupAppListeners();
+      updateBreadcrumb();
+
+      // always show login first
+      document.getElementById("loginModal").classList.remove("hidden");
+      document.getElementById("mainApp").classList.add("hidden");
+
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        document.getElementById("userEmail").textContent = user ? user.email : "";
+      });
+    });
+
+    // ---------- 4) Auth ----------
+    function setupAuthListeners() {
+      document.getElementById("loginForm").addEventListener("submit", login);
+      document.getElementById("goSignup").addEventListener("click", switchToSignup);
+    }
+
+    async function login(e) {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      try {
+        const cred = await signInWithEmailAndPassword(auth, email, password); // [web:336]
+        currentUser = cred.user;
+        showMainApp();
+        currentPath = [];
+        await loadFiles();
+      } catch (err) {
+        alert("Login failed: " + err.message);
+      }
+    }
+
+    function switchToSignup() {
+      const card = document.getElementById("authCard");
+      card.innerHTML = `
+        <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Sign Up</h2>
+        <p class="text-slate-400 text-xs text-center mb-6">
+          Create an account with your student email to upload papers.
+        </p>
+        <form id="signupForm" class="space-y-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Email</label>
+            <input type="email" id="signupEmail"
+                   class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/70 text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                   placeholder="student@manipal.edu" required>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Password</label>
+            <input type="password" id="signupPassword"
+                   class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/70 text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                   placeholder="••••••••" required>
+          </div>
+          <button type="submit"
+                  class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-emerald-500/40">
+            Sign Up
+          </button>
+        </form>
+        <p class="text-center mt-4 text-xs text-slate-400">
+          Already registered?
+          <button id="goLogin" class="text-sky-300 font-semibold hover:text-sky-200 underline-offset-2 hover:underline">
+            Back to login
+          </button>
+        </p>
+      `;
+      document.getElementById("signupForm").addEventListener("submit", signup);
+      document.getElementById("goLogin").addEventListener("click", () => location.reload());
+    }
+
+    async function signup(e) {
+      e.preventDefault();
+      const email = document.getElementById("signupEmail").value;
+      const password = document.getElementById("signupPassword").value;
+      try {
+        await createUserWithEmailAndPassword(auth, email, password); // [web:336]
+        alert("Signup success. Now login with your credentials.");
+        location.reload();
+      } catch (err) {
+        alert("Signup failed: " + err.message);
+      }
+    }
+
+    function showMainApp() {
+      document.getElementById("loginModal").classList.add("hidden");
+      document.getElementById("mainApp").classList.remove("hidden");
+      document.getElementById("userEmail").classList.remove("hidden");
+      document.getElementById("logoutBtn").classList.remove("hidden");
+    }
+
+    // ---------- 5) App controls ----------
+    function setupAppListeners() {
+      document.getElementById("logoutBtn").onclick = async () => {
+        await signOut(auth);
+        location.reload();
+      };
+
+      document.getElementById("fileInput").onchange = handleUpload;
+
+      document.getElementById("newFolderBtn").onclick =
+        () => document.getElementById("folderForm").classList.toggle("hidden");
+
+      document.getElementById("createFolderBtn").onclick = createFolder;
+
+      document.getElementById("cancelFolderBtn").onclick =
+        () => document.getElementById("folderForm").classList.add("hidden");
+
+      document.getElementById("backBtn").onclick = () => {
+        if (currentPath.length > 0) {
+          currentPath.pop();
+          loadFiles();
+        }
+      };
+    }
+
+    async function handleUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!currentUser) { alert("Please login first."); return; }
+
+      // Everything stored under SEM3 root for now
+      const baseSegments = ["SEM3", ...currentPath];
+      const path = [...baseSegments, file.name].join("/");
+      const fileRef = ref(storage, path);                 // [web:329][web:335]
+
+      try {
+        await uploadBytes(fileRef, file);
+        await loadFiles();
+        e.target.value = "";
+        alert("File uploaded.");
+      } catch (err) {
+        alert("Upload failed: " + err.message);
+      }
+    }
+
+    async function createFolder() {
+      const sem = document.getElementById("semSelect").value;
+      const branch = document.getElementById("branchSelect").value;
+      const year = document.getElementById("yearSelect").value;
+      const examType = document.getElementById("examTypeSelect").value;
+      const subject = document.getElementById("subjectInput").value.trim();
+
+      if (!sem || !branch || !year || !examType || !subject) {
+        alert("Select semester, branch, year, exam type and subject.");
+        return;
+      }
+
+      // create dummy file to keep folder
+      const folderPath = `SEM3/${sem}/${branch}/${year}/${examType}/${subject}/keep.txt`;
+      const dummyRef = ref(storage, folderPath);
+      const blob = new Blob(["folder"], { type: "text/plain" });
+
+      try {
+        await uploadBytes(dummyRef, blob);
+        currentPath = [];
+        await loadFiles();
+        document.getElementById("folderForm").classList.add("hidden");
+        document.querySelectorAll("#folderForm select, #folderForm input")
+          .forEach(el => el.value = "");
+        alert("Folder created.");
+      } catch (err) {
+        alert("Folder failed: " + err.message);
+      }
+    }
+
+    // ---------- 6) List files/folders ----------
+    async function loadFiles() {
+      updateBreadcrumb();
+
+      const base = currentPath.length === 0
+        ? "SEM3"
+        : ["SEM3", ...currentPath].join("/");
+
+      const listRef = ref(storage, base);                // [web:335]
+
+      try {
+        const res = await listAll(listRef);
+        const container = document.getElementById("filesContainer");
+
+        if (res.prefixes.length === 0 && res.items.length === 0) {
+          container.innerHTML = `
+            <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
+              <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
+              <p>No items here yet. Create a folder or upload a PDF.</p>
+            </div>`;
+          return;
+        }
+
+        const folderCards = res.prefixes.map(p => {
+          const name = p.name;
+          return `
+            <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
+                 onclick="navigateFolder('${name}')">
+              <i class="fa-solid fa-folder text-amber-400 text-3xl mb-3"></i>
+              <div class="text-xs font-medium text-slate-100 truncate w-full">${name}</div>
+            </div>`;
+        });
+
+        const fileCards = await Promise.all(res.items.map(async itemRef => {
+          const fullName = itemRef.name.split("/").pop();
+          const url = await getDownloadURL(itemRef);
+          return `
+            <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
+                 onclick="downloadFromUrl('${url}','${fullName}')">
+              <i class="fa-solid fa-file-pdf text-rose-400 text-3xl mb-3"></i>
+              <div class="text-xs font-medium text-slate-100 truncate w-full">${fullName}</div>
+            </div>`;
+        }));
+
+        container.innerHTML = folderCards.concat(fileCards).join("");
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load files: " + err.message);
+      }
+    }
+
+    // functions used in inline onclick
+    window.navigateFolder = (name) => {
+      if (!name) return;
+      currentPath.push(name);
+      loadFiles();
+    };
+
+    window.downloadFromUrl = (url, filename) => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+    };
+
+    function updateBreadcrumb() {
+      const bc = document.getElementById("breadcrumb");
+      let html = '<i class="fa-solid fa-house text-sky-300 mr-1"></i>';
+      if (currentPath.length === 0) {
+        html += '<span class="text-slate-300 text-xs">SEM3</span>';
+      } else {
+        html += '<button class="text-slate-300 hover:text-sky-300 text-xs mr-1" onclick="currentPath=[]; loadFiles();">SEM3</button>';
+      }
+      currentPath.forEach((part, idx) => {
+        html += `
+          <span class="mx-1 text-slate-500">/</span>
+          <button class="text-slate-200 hover:text-sky-300 text-xs"
+                  onclick="currentPath = currentPath.slice(0,${idx+1}); loadFiles();">
+            ${part}
+          </button>`;
+      });
+      bc.innerHTML = html;
+    }
+  </script>
 
   <style>
     * { font-family: 'Inter', sans-serif; }
@@ -186,7 +476,7 @@
           </select>
 
           <select id="examTypeSelect"
-                  class="px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-700 text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                  class="px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-700 text-slate-100 focus:ring-2 focus:ring-sky-500 focus-border-sky-500">
             <option value="">Exam Type</option>
             <option value="MIDSEM">Midsem</option>
             <option value="ENDSEM">Endsem</option>
@@ -214,270 +504,5 @@
       </div>
     </div>
   </div>
-
-  <!-- Main script -->
-  <script>
-    // 1) Supabase config (project yzdbskvnfoogboeuxtyi) [web:194]
-    const SUPABASE_URL = 'https://gfoszdtmyplrsdrdylkd.supabase.co';
-    const SUPABASE_ANON_KEY ='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmb3N6ZHRteXBscnNkcmR5bGtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NTcwNjQsImV4cCI6MjA4MjMzMzA2NH0.jkDiJBQJenlsf5Poj0eJuso2mze3znGdRShKGtkRAv8';
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: false,   // force login every reload [web:291]
-        autoRefreshToken: false
-      }
-    });
-
-    let currentPath = [];
-    let user = null;
-
-    // Always show login on load (no auto session restore)
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('loginModal').classList.remove('hidden');
-      document.getElementById('mainApp').classList.add('hidden');
-
-      setupAuthListeners();
-      setupAppListeners();
-      updateBreadcrumb();
-    });
-
-    // ---------- Auth ----------
-    function setupAuthListeners() {
-      document.getElementById('loginForm').addEventListener('submit', login);
-      document.getElementById('goSignup').addEventListener('click', switchToSignup);
-    }
-
-    async function login(e) {
-      e.preventDefault();
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) {
-        alert('Login failed: ' + error.message);
-        return;
-      }
-      user = data.user;
-      showMainApp();
-      currentPath = [];
-      await loadFiles();
-    }
-
-    function switchToSignup() {
-      const card = document.getElementById('authCard');
-      card.innerHTML = `
-        <h2 class="text-2xl font-semibold text-slate-50 mb-1 text-center">Student Sign Up</h2>
-        <p class="text-slate-400 text-xs text-center mb-6">
-          Create an account with your student email to upload papers.
-        </p>
-        <form id="signupForm" class="space-y-4">
-          <div>
-            <label class="block text-xs text-slate-400 mb-1">Email</label>
-            <input type="email" id="signupEmail"
-                   class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/70 text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                   placeholder="student@manipal.edu" required>
-          </div>
-          <div>
-            <label class="block text-xs text-slate-400 mb-1">Password</label>
-            <input type="password" id="signupPassword"
-                   class="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/70 text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                   placeholder="••••••••" required>
-          </div>
-          <button type="submit"
-                  class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-emerald-500/40">
-            Sign Up
-          </button>
-        </form>
-        <p class="text-center mt-4 text-xs text-slate-400">
-          Already registered?
-          <button id="goLogin" class="text-sky-300 font-semibold hover:text-sky-200 underline-offset-2 hover:underline">
-            Back to login
-          </button>
-        </p>
-      `;
-      document.getElementById('signupForm').addEventListener('submit', signup);
-      document.getElementById('goLogin').addEventListener('click', () => location.reload());
-    }
-
-    async function signup(e) {
-      e.preventDefault();
-      const email = document.getElementById('signupEmail').value;
-      const password = document.getElementById('signupPassword').value;
-      const { error } = await sb.auth.signUp({ email, password });
-      if (error) {
-        alert('Signup failed: ' + error.message);
-        return;
-      }
-      alert('Signup success. Verify email if required, then reload and login.');
-    }
-
-    function showMainApp() {
-      document.getElementById('loginModal').classList.add('hidden');
-      document.getElementById('mainApp').classList.remove('hidden');
-      document.getElementById('userEmail').classList.remove('hidden');
-      document.getElementById('logoutBtn').classList.remove('hidden');
-      document.getElementById('userEmail').textContent = user?.email || '';
-    }
-
-    // ---------- App controls ----------
-    function setupAppListeners() {
-      document.getElementById('logoutBtn').onclick = async () => {
-        await sb.auth.signOut();   // clear server-side session [web:280]
-        location.reload();         // forces login again
-      };
-      document.getElementById('fileInput').onchange = handleUpload;
-      document.getElementById('newFolderBtn').onclick =
-        () => document.getElementById('folderForm').classList.toggle('hidden');
-      document.getElementById('createFolderBtn').onclick = createFolder;
-      document.getElementById('cancelFolderBtn').onclick =
-        () => document.getElementById('folderForm').classList.add('hidden');
-      document.getElementById('backBtn').onclick = () => {
-        if (currentPath.length > 0) { currentPath.pop(); loadFiles(); }
-      };
-    }
-
-    async function handleUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (!user) { alert('Please login first.'); return; }
-
-      const path = [...currentPath, file.name].join('/');
-      const { error } = await sb.storage.from('question-papers').upload(path, file);
-      if (error) { alert('Upload failed: ' + error.message); }
-      else { await loadFiles(); e.target.value = ''; alert('File uploaded.'); }
-    }
-
-    async function createFolder() {
-      const sem = document.getElementById('semSelect').value;
-      const branch = document.getElementById('branchSelect').value;
-      const year = document.getElementById('yearSelect').value;
-      const examType = document.getElementById('examTypeSelect').value;
-      const subject = document.getElementById('subjectInput').value.trim();
-
-      if (!sem || !branch || !year || !examType || !subject) {
-        alert('Select semester, branch, year, exam type and subject.');
-        return;
-      }
-
-      // SEM/BRANCH/YEAR/EXAMTYPE/SUBJECT/.keep
-      const folderPath = `${sem}/${branch}/${year}/${examType}/${subject}/.keep`;
-
-      const { error } = await sb.storage.from('question-papers')
-        .upload(folderPath, new Blob(['folder'], { type: 'text/plain' }));
-      if (error) {
-        alert('Folder failed: ' + error.message);
-      } else {
-        currentPath = [];
-        await loadFiles();
-        document.getElementById('folderForm').classList.add('hidden');
-        document.querySelectorAll('#folderForm select, #folderForm input')
-          .forEach(el => el.value = '');
-        alert('Folder created.');
-      }
-    }
-
-    // ---------- Load files / folders ----------
-    async function loadFiles() {
-      updateBreadcrumb();
-
-      const prefix = currentPath.join('/');
-
-      const { data, error } = await sb.storage
-        .from('question-papers')
-        .list(prefix || '', {
-          limit: 200,
-          sortBy: { column: 'name', order: 'asc' }
-        });
-
-      // TEMP debug log – keep for now
-      console.log('prefix =', `"${prefix}"`, 'data =', data, 'error =', error);
-
-      if (error) {
-        console.error('Error loading files:', error.message);
-        return;
-      }
-
-      const container = document.getElementById('filesContainer');
-
-      if (!data || data.length === 0) {
-        container.innerHTML = `
-          <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400 text-sm">
-            <i class="fa-regular fa-folder-open text-4xl mb-2"></i>
-            <p>No items here yet. Create a folder or upload a PDF.</p>
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = data.map(item => {
-        // Supabase v2: folders have type === 'folder' [web:247]
-        const isFolder = item.type === 'folder';
-
-        const iconClass = isFolder ? 'fa-folder' : 'fa-file-pdf';
-        const iconColor = isFolder ? 'text-amber-400' : 'text-rose-400';
-
-        const displayName = item.name.replace(/\/$/, '');
-
-        const onClick = isFolder
-          ? `navigateFolder('${displayName}')`
-          : `downloadFile('${item.name}')`;
-
-        return `
-          <div
-            class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
-            onclick="${onClick}"
-          >
-            <i class="fa-solid ${iconClass} ${iconColor} text-3xl mb-3"></i>
-            <div class="text-xs font-medium text-slate-100 truncate w-full">
-              ${displayName}
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function navigateFolder(name) {
-      if (!name) return;
-      currentPath.push(name);
-      loadFiles();
-    }
-
-    function updateBreadcrumb() {
-      const bc = document.getElementById('breadcrumb');
-      let html = '<i class="fa-solid fa-house text-sky-300 mr-1"></i>';
-      if (currentPath.length === 0) {
-        html += '<span class="text-slate-300 text-xs">Root</span>';
-      } else {
-        html += '<button class="text-slate-300 hover:text-sky-300 text-xs mr-1" onclick="currentPath=[]; loadFiles();">Root</button>';
-      }
-      currentPath.forEach((part, idx) => {
-        html += `
-          <span class="mx-1 text-slate-500">/</span>
-          <button class="text-slate-200 hover:text-sky-300 text-xs"
-                  onclick="currentPath = currentPath.slice(0,${idx+1}); loadFiles();">
-            ${part}
-          </button>`;
-      });
-      bc.innerHTML = html;
-    }
-
-    async function downloadFile(filename) {
-      const fullPath = [...currentPath, filename].join('/');
-      const { data, error } = await sb.storage
-        .from('question-papers')
-        .createSignedUrl(fullPath, 60);
-      if (error) {
-        alert('Download failed: ' + error.message);
-        return;
-      }
-      const a = document.createElement('a');
-      a.href = data.signedURL;
-      a.download = filename;
-      a.click();
-    }
-  </script>
 </body>
 </html>
-
-
-
-
