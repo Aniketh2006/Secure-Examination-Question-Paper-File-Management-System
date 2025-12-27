@@ -192,9 +192,8 @@
     async function loadFiles() {
       updateBreadcrumb();
 
-      const base = currentPath.length === 0
-        ? "SEM3"
-        : ["SEM3", ...currentPath].join("/");
+     const base = currentPath.length === 0 ? "" : currentPath.join("/");
+
 
       const { data, error } = await sb.storage
         .from(BUCKET)
@@ -510,4 +509,5 @@
   </div>
 </body>
 </html>
+
 
