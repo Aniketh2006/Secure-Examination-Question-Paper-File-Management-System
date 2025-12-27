@@ -15,9 +15,8 @@
 
   <script>
     // ---------- 1) Supabase config (REPLACE) ----------
-const SUPABASE_URL = "https://yzdbskvnfoogboeuxtyi.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw";
-
+    const SUPABASE_URL = "https://yzdbskvnfoogboeuxtyi.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZGJza3ZuZm9vZ2JvZXV4dHlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMjEyMzEsImV4cCI6MjA4MTg5NzIzMX0.VkvjqtkRipYp_GLGv6hUYx9JYCCeq6w6j9GHru1fBFw";
 
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
@@ -28,7 +27,10 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
     const BUCKET = "question-papers"; // hard-coded bucket name
 
-    let currentPath = [];   // inside SEM3
+    // NOTE: currentPath is now from bucket ROOT
+    // []  -> root
+    // ["SEM3"] -> inside SEM3 folder, etc.
+    let currentPath = [];
     let user = null;
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -138,12 +140,18 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       };
     }
 
+    // --------- helper for current path string ----------
+    function getCurrentPathString() {
+      return currentPath.length === 0 ? "" : currentPath.join("/");
+    }
+
     async function handleUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
 
-      const baseSegments = ["SEM3", ...currentPath];
-      const path = [...baseSegments, file.name].join("/");
+      // upload into the CURRENT folder (no forced SEM3)
+      const baseSegments = [...currentPath];
+      const path = baseSegments.length ? [...baseSegments, file.name].join("/") : file.name;
 
       const { error } = await sb.storage.from(BUCKET).upload(path, file, {
         upsert: true,
@@ -170,7 +178,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         return;
       }
 
-      const folderPath = `SEM3/${sem}/${branch}/${year}/${examType}/${subject}/keep.txt`;
+      // folder hierarchy rooted at bucket root: SEMx/BRANCH/YEAR/EXAM/SUBJECT
+      const folderPath = `${sem}/${branch}/${year}/${examType}/${subject}/keep.txt`;
+
       const { error } = await sb.storage
         .from(BUCKET)
         .upload(folderPath, new Blob(["folder"], { type: "text/plain" }), {
@@ -193,13 +203,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     async function loadFiles() {
       updateBreadcrumb();
 
-      const base = currentPath.length === 0
-        ? "SEM3"
-        : ["SEM3", ...currentPath].join("/");
+      const base = getCurrentPathString();
 
       const { data, error } = await sb.storage
         .from(BUCKET)
-        .list(base, { limit: 100, sortBy: { column: "name", order: "asc" } }); // [web:376][web:379]
+        .list(base, { limit: 100, sortBy: { column: "name", order: "asc" } }); // [web:376]
 
       const container = document.getElementById("filesContainer");
 
@@ -225,30 +233,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       const folderCards = [];
       const fileCards = [];
 
-      for (const item of data) {
-        if (item.name.endsWith("/")) continue;
-
-        if (item.metadata && item.metadata.is_directory) {
-          // not used with current API, but keep for future
-        }
-
-        if (item.name.indexOf(".") === -1 && item.id === null) {
-          // would be directories in some SDKs
-        }
-
-        if (item.id === null && !item.name.includes(".")) {
-          // ignore
-        }
-
-        if (item.updated_at === null && item.created_at === null && item.metadata === null) {
-          // ignore
-        }
-      }
-
-      // Supabase list() does not separate folders/files: treat names that have no '.' as folders
+      // Supabase list() returns both files and "folders" (prefixes). [web:376]
       for (const item of data) {
         if (!item.name) continue;
         const isFolder = !item.name.includes(".");
+
         if (isFolder) {
           folderCards.push(`
             <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
@@ -258,13 +247,24 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             </div>`);
         } else {
           const fullName = item.name;
-          const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(`${base}/${fullName}`); // [web:382]
+          const fullPath = base ? `${base}/${fullName}` : fullName;
+
+          const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(fullPath); // [web:421]
           const url = pub.publicUrl;
+
+          // full-width row layout so fullName is readable
           fileCards.push(`
-            <div class="grid-card bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-4 flex flex-col items-center text-center cursor-pointer transition-all duration-200 hover:border-sky-500/70 hover:bg-slate-900"
-                 onclick="downloadFromUrl('${url}','${fullName}')">
-              <i class="fa-solid fa-file-pdf text-rose-400 text-3xl mb-3"></i>
-              <div class="text-xs font-medium text-slate-100 truncate w-full">${fullName}</div>
+            <div class="col-span-full">
+              <div class="bg-slate-900/70 border border-slate-700/70 rounded-xl px-4 py-3 flex items-center justify-between gap-3 cursor-pointer hover:border-sky-500/70 hover:bg-slate-900"
+                   onclick="downloadFromUrl('${url}','${fullName}')">
+                <div class="flex items-center gap-3">
+                  <i class="fa-solid fa-file-pdf text-rose-400 text-xl"></i>
+                  <div class="text-sm font-medium text-slate-100 break-all">
+                    ${fullName}
+                  </div>
+                </div>
+                <i class="fa-solid fa-download text-slate-300 text-xs"></i>
+              </div>
             </div>`);
         }
       }
@@ -276,9 +276,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       const bc = document.getElementById("breadcrumb");
       let html = '<i class="fa-solid fa-house text-sky-300 mr-1"></i>';
       if (currentPath.length === 0) {
-        html += '<span class="text-slate-300 text-xs">SEM3</span>';
+        html += '<span class="text-slate-300 text-xs">ROOT</span>';
       } else {
-        html += '<button class="text-slate-300 hover:text-sky-300 text-xs mr-1" onclick="currentPath=[]; loadFiles();">SEM3</button>';
+        html += '<button class="text-slate-300 hover:text-sky-300 text-xs mr-1" onclick="currentPath=[]; loadFiles();">ROOT</button>';
       }
       currentPath.forEach((part, idx) => {
         html += `
