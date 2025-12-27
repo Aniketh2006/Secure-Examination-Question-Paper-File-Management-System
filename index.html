@@ -28,7 +28,7 @@
       listAll
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
-    // ---------- 1) Firebase config: YOUR VALUES ----------
+    // ---------- 1) Firebase config ----------
     const firebaseConfig = {
       apiKey: "AIzaSyB1f9MxzzfxwOGF4DtsRurS3Ze10JRQLG4",
       authDomain: "mit-question-vault.firebaseapp.com",
@@ -39,9 +39,9 @@
       measurementId: "G-J5CTJJ8DK9"
     };
 
-    const app = initializeApp(firebaseConfig);          // [web:329]
-    const auth = getAuth(app);                          // [web:336]
-    const storage = getStorage(app);                    // [web:329]
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const storage = getStorage(app);
 
     // ---------- 2) State ----------
     let currentPath = [];   // inside SEM3
@@ -53,7 +53,6 @@
       setupAppListeners();
       updateBreadcrumb();
 
-      // always show login first
       document.getElementById("loginModal").classList.remove("hidden");
       document.getElementById("mainApp").classList.add("hidden");
 
@@ -75,7 +74,7 @@
       const password = document.getElementById("password").value;
 
       try {
-        const cred = await signInWithEmailAndPassword(auth, email, password); // [web:336]
+        const cred = await signInWithEmailAndPassword(auth, email, password);
         currentUser = cred.user;
         showMainApp();
         currentPath = [];
@@ -126,7 +125,7 @@
       const email = document.getElementById("signupEmail").value;
       const password = document.getElementById("signupPassword").value;
       try {
-        await createUserWithEmailAndPassword(auth, email, password); // [web:336]
+        await createUserWithEmailAndPassword(auth, email, password);
         alert("Signup success. Now login with your credentials.");
         location.reload();
       } catch (err) {
@@ -153,7 +152,7 @@
       document.getElementById("newFolderBtn").onclick =
         () => document.getElementById("folderForm").classList.toggle("hidden");
 
-      document.getElementById("createFolderBtn").onclick = createFolder;
+      document.getElementById("createFolderBtn").onclick = () => createFolder();
 
       document.getElementById("cancelFolderBtn").onclick =
         () => document.getElementById("folderForm").classList.add("hidden");
@@ -171,10 +170,9 @@
       if (!file) return;
       if (!currentUser) { alert("Please login first."); return; }
 
-      // Everything stored under SEM3 root for now
       const baseSegments = ["SEM3", ...currentPath];
       const path = [...baseSegments, file.name].join("/");
-      const fileRef = ref(storage, path);                 // [web:329][web:335]
+      const fileRef = ref(storage, path);
 
       try {
         await uploadBytes(fileRef, file);
@@ -198,7 +196,6 @@
         return;
       }
 
-      // create dummy file to keep folder
       const folderPath = `SEM3/${sem}/${branch}/${year}/${examType}/${subject}/keep.txt`;
       const dummyRef = ref(storage, folderPath);
       const blob = new Blob(["folder"], { type: "text/plain" });
@@ -224,7 +221,7 @@
         ? "SEM3"
         : ["SEM3", ...currentPath].join("/");
 
-      const listRef = ref(storage, base);                // [web:335]
+      const listRef = ref(storage, base);
 
       try {
         const res = await listAll(listRef);
@@ -267,20 +264,6 @@
       }
     }
 
-    // functions used in inline onclick
-    window.navigateFolder = (name) => {
-      if (!name) return;
-      currentPath.push(name);
-      loadFiles();
-    };
-
-    window.downloadFromUrl = (url, filename) => {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-    };
-
     function updateBreadcrumb() {
       const bc = document.getElementById("breadcrumb");
       let html = '<i class="fa-solid fa-house text-sky-300 mr-1"></i>';
@@ -299,6 +282,23 @@
       });
       bc.innerHTML = html;
     }
+
+    // ---------- 7) expose functions to window for inline onclick ----------
+    window.navigateFolder = (name) => {
+      if (!name) return;
+      currentPath.push(name);
+      loadFiles();
+    };
+
+    window.downloadFromUrl = (url, filename) => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+    };
+
+    window.loadFiles = () => loadFiles();
+    window.createFolder = () => createFolder();
   </script>
 
   <style>
